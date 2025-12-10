@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +28,6 @@ class NacosFallbackAutoConfigurationTest {
                     .withPropertyValues("nacos.fallback.enabled=false")
                     .run(context -> {
                         assertThat(context).doesNotHaveBean(NacosFallbackServiceDiscovery.class);
-                        assertThat(context).doesNotHaveBean("nacosFallbackTaskScheduler");
                     });
         }
 
@@ -39,29 +37,7 @@ class NacosFallbackAutoConfigurationTest {
             contextRunner
                     .run(context -> {
                         assertThat(context).doesNotHaveBean(NacosFallbackServiceDiscovery.class);
-                        assertThat(context).doesNotHaveBean("nacosFallbackTaskScheduler");
                     });
-        }
-    }
-
-    @Nested
-    @DisplayName("TaskScheduler Bean 测试")
-    class TaskSchedulerBeanTest {
-
-        @Test
-        @DisplayName("ThreadPoolTaskScheduler 应正确配置")
-        void shouldConfigureThreadPoolTaskScheduler() {
-            NacosFallbackAutoConfiguration config = new NacosFallbackAutoConfiguration();
-            ThreadPoolTaskScheduler scheduler = config.nacosFallbackTaskScheduler();
-
-            assertThat(scheduler).isNotNull();
-            assertThat(scheduler.getThreadNamePrefix()).isEqualTo("nacos-fallback-");
-            // getPoolSize() 返回当前活跃线程数，而不是配置的池大小
-            // 通过提交任务验证调度器正常工作
-            assertThat(scheduler.getScheduledExecutor()).isNotNull();
-
-            // 清理
-            scheduler.shutdown();
         }
     }
 
@@ -70,20 +46,20 @@ class NacosFallbackAutoConfigurationTest {
     class ServiceDiscoveryBeanTest {
 
         @Test
-        @DisplayName("应正确创建 NacosFallbackServiceDiscovery")
-        void shouldCreateServiceDiscoveryBean() {
+        @DisplayName("应正确创建 NacosFallbackServiceDiscovery（内部调度器）")
+        void shouldCreateServiceDiscoveryBeanWithInternalScheduler() {
             NacosFallbackAutoConfiguration config = new NacosFallbackAutoConfiguration();
             NacosFallbackProperties properties = new NacosFallbackProperties();
             properties.setEnabled(true);
             properties.setTestPublicIp("10.0.0.1");
 
-            ThreadPoolTaskScheduler scheduler = config.nacosFallbackTaskScheduler();
-            NacosFallbackServiceDiscovery discovery = config.nacosFallbackServiceDiscovery(properties, scheduler);
+            // 现在 nacosFallbackServiceDiscovery 内部创建调度器，不再需要外部传入
+            NacosFallbackServiceDiscovery discovery = config.nacosFallbackServiceDiscovery(properties);
 
             assertThat(discovery).isNotNull();
 
-            // 清理
-            scheduler.shutdown();
+            // 停止以清理内部调度器
+            discovery.stop();
         }
     }
 

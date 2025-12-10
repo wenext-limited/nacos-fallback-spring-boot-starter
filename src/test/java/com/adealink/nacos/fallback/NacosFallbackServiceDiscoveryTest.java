@@ -12,7 +12,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -37,7 +37,7 @@ class NacosFallbackServiceDiscoveryTest {
     private NamingService testNamingService;
 
     @Mock
-    private TaskScheduler taskScheduler;
+    private ThreadPoolTaskScheduler taskScheduler;
 
     @Mock
     private ScheduledFuture<?> scheduledFuture;
@@ -66,7 +66,7 @@ class NacosFallbackServiceDiscoveryTest {
 
     private void createServiceDiscovery() {
         serviceDiscovery = new NacosFallbackServiceDiscovery(
-                properties, taskScheduler, namingServiceFactory, INSTANCE_ID);
+                properties, taskScheduler, namingServiceFactory, INSTANCE_ID, false);
     }
 
     @Nested

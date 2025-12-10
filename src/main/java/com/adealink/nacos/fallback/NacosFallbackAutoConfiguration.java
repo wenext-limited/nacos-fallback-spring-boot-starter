@@ -9,7 +9,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.client.ConditionalOnDiscoveryEnabled;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
  * Nacos Fallback 自动配置
@@ -30,29 +29,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 public class NacosFallbackAutoConfiguration {
 
     /**
-     * 创建专用的任务调度器
-     * <p>
-     * 特性：
-     * <ul>
-     *   <li>守护线程，不阻塞 JVM 退出</li>
-     *   <li>单线程池，避免并发问题</li>
-     *   <li>优雅关闭，等待任务完成</li>
-     * </ul>
-     */
-    @Bean(destroyMethod = "shutdown")
-    @ConditionalOnMissingBean(name = "nacosFallbackTaskScheduler")
-    public ThreadPoolTaskScheduler nacosFallbackTaskScheduler() {
-        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(1);
-        scheduler.setThreadNamePrefix("nacos-fallback-");
-        scheduler.setDaemon(true);
-        scheduler.setWaitForTasksToCompleteOnShutdown(true);
-        scheduler.setAwaitTerminationSeconds(10);
-        scheduler.initialize();
-        return scheduler;
-    }
-
-    /**
      * 创建 Nacos Fallback 服务同步组件
      * <p>
      * 通过 initMethod 和 destroyMethod 管理生命周期：
@@ -60,17 +36,18 @@ public class NacosFallbackAutoConfiguration {
      *   <li>start(): 异步启动同步任务</li>
      *   <li>stop(): 释放资源，清理 fallback 实例</li>
      * </ul>
+     * <p>
+     * 内部使用专用的任务调度器，不暴露为 Spring Bean，
+     * 避免影响应用中 @Scheduled 注解的调度行为。
      */
     @Bean(initMethod = "start", destroyMethod = "stop")
     @ConditionalOnMissingBean
-    public NacosFallbackServiceDiscovery nacosFallbackServiceDiscovery(
-            NacosFallbackProperties properties,
-            ThreadPoolTaskScheduler nacosFallbackTaskScheduler) {
+    public NacosFallbackServiceDiscovery nacosFallbackServiceDiscovery(NacosFallbackProperties properties) {
         log.info("Initializing Nacos fallback sync service");
         log.info("  Local Nacos: {}", properties.getLocalServerAddr());
         log.info("  Remote Nacos: {}", properties.getTestServerAddr());
         log.info("  Sync interval: {} seconds", properties.getSyncIntervalSeconds());
 
-        return new NacosFallbackServiceDiscovery(properties, nacosFallbackTaskScheduler);
+        return new NacosFallbackServiceDiscovery(properties);
     }
 }

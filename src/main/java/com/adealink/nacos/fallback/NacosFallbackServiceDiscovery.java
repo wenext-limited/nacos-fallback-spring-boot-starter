@@ -5,7 +5,7 @@ import com.alibaba.nacos.api.naming.NamingService;
 import com.alibaba.nacos.api.naming.pojo.Instance;
 import com.alibaba.nacos.api.naming.pojo.ListView;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import com.alibaba.nacos.api.exception.NacosException;
@@ -32,7 +32,8 @@ public class NacosFallbackServiceDiscovery {
 
     private final NacosFallbackProperties properties;
     private final NamingServiceFactory namingServiceFactory;
-    private final TaskScheduler taskScheduler;
+    private final ThreadPoolTaskScheduler taskScheduler;
+    private final boolean ownedScheduler; // 标记调度器是否由本类创建，用于判断是否需要关闭
     private volatile NamingService testNamingService;
     private volatile NamingService localNamingService;
     private volatile boolean initialized = false;
@@ -49,18 +50,36 @@ public class NacosFallbackServiceDiscovery {
     // 已同步的服务名集合，用于清理不再存在的服务
     private final Set<String> syncedServices = new HashSet<>();
 
-    public NacosFallbackServiceDiscovery(NacosFallbackProperties properties, TaskScheduler taskScheduler) {
-        this(properties, taskScheduler, new DefaultNamingServiceFactory(), UUID.randomUUID().toString());
+    public NacosFallbackServiceDiscovery(NacosFallbackProperties properties) {
+        this(properties, createInternalScheduler(), new DefaultNamingServiceFactory(), UUID.randomUUID().toString(), true);
     }
 
     NacosFallbackServiceDiscovery(NacosFallbackProperties properties,
-                                  TaskScheduler taskScheduler,
+                                  ThreadPoolTaskScheduler taskScheduler,
                                   NamingServiceFactory namingServiceFactory,
-                                  String instanceId) {
+                                  String instanceId,
+                                  boolean ownedScheduler) {
         this.properties = properties;
         this.taskScheduler = taskScheduler;
         this.namingServiceFactory = namingServiceFactory;
         this.instanceId = instanceId;
+        this.ownedScheduler = ownedScheduler;
+    }
+
+    /**
+     * 创建内部专用的任务调度器
+     * <p>
+     * 不暴露为 Spring Bean，避免影响应用中的 @Scheduled 注解
+     */
+    private static ThreadPoolTaskScheduler createInternalScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("nacos-fallback-");
+        scheduler.setDaemon(true);
+        scheduler.setWaitForTasksToCompleteOnShutdown(true);
+        scheduler.setAwaitTerminationSeconds(10);
+        scheduler.initialize();
+        return scheduler;
     }
 
     /**
@@ -693,7 +712,7 @@ public class NacosFallbackServiceDiscovery {
                 releaseLeadership();
             }
 
-            // 取消调度任务（线程池由 Spring 管理，不在这里 shutdown）
+            // 取消调度任务
             if (syncTask != null) {
                 syncTask.cancel(false);
                 syncTask = null;
@@ -706,6 +725,11 @@ public class NacosFallbackServiceDiscovery {
             // 清理所有 fallback 实例
             if (localNamingService != null) {
                 cleanupAllFallbackInstances();
+            }
+
+            // 关闭内部创建的调度器
+            if (ownedScheduler && taskScheduler != null) {
+                taskScheduler.shutdown();
             }
 
             log.info("Nacos fallback sync service stopped");

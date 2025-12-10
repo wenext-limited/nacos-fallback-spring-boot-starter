@@ -6,12 +6,12 @@
 
 ### 1. 添加 Maven 依赖
 
-在 `weparty-common` 中，此 starter 仅在 `dev` profile 下引入：
+在 `weparty-common` 中，此 starter 仅在 `local` profile 下引入：
 
 ```xml
 <profiles>
     <profile>
-        <id>dev</id>
+        <id>local</id>
         <dependencies>
             <dependency>
                 <groupId>com.adealink.weparty.fungo</groupId>
@@ -23,14 +23,14 @@
 </profiles>
 ```
 
-**激活 dev profile：**
+**激活 local profile：**
 
 ```bash
 # Maven 命令行
-mvn compile -Pdev
-mvn package -Pdev
+mvn compile -Plocal
+mvn package -Plocal
 
-# 或在 IDE 中勾选 dev profile
+# 或在 IDE 中勾选 local profile
 ```
 
 ### 2. 配置环境变量
@@ -229,7 +229,7 @@ INFO  - Nacos fallback sync started after leader election, interval: 60 seconds
 
 ## 注意事项
 
-1. **Maven Profile**: 在 `weparty-common` 中需要激活 `dev` profile 才会引入此依赖
+1. **Maven Profile**: 在 `weparty-common` 中需要激活 `local` profile 才会引入此依赖
 2. **网络连通性**: 确保本地开发环境能够访问测试环境的公网 IP 和端口
 3. **端口映射**: 确保测试环境的服务端口可以通过公网 IP 访问
 4. **命名空间隔离**: 建议使用不同的 namespace 区分环境
@@ -241,7 +241,7 @@ INFO  - Nacos fallback sync started after leader election, interval: 60 seconds
 ### 问题 1: 同步服务未启动
 
 检查项:
-- 确认 Maven `dev` profile 已激活
+- 确认 Maven `local` profile 已激活
 - 确认 `NACOS_FALLBACK_ENABLED=true`
 - 查看启动日志是否有 "Initializing Nacos fallback sync service"
 - 检查自动配置是否生效
@@ -297,7 +297,7 @@ INFO  - Nacos fallback sync started after leader election, interval: 60 seconds
 
 - **Leader 选举**: 利用 Nacos 临时实例(ephemeral)实现,服务停止自动注销
 - **竞争条件处理**: 使用 `startTime` 元数据,多个实例同时注册时最早的获胜
-- **定时任务**: 使用 `TaskScheduler` 实现定期同步和 Leader 健康检查
+- **定时任务**: 使用内部 `ThreadPoolTaskScheduler` 实现定期同步和 Leader 健康检查,不暴露为 Spring Bean,避免影响应用中 `@Scheduled` 注解的调度行为
 - **增量同步**: 以 `ip:port` 为 key 对比实例变化,先增后删减少抖动
 - **心跳保活**: Nacos SDK 自动为临时实例维护心跳(默认5秒),无需手动管理
 - **异步处理**: 所有同步操作异步执行,不阻塞主线程

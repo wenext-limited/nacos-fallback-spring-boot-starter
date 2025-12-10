@@ -108,4 +108,17 @@
         </plugins>
     </build>
 
+    <distributionManagement>
+        <repository>
+            <id>maven-releases</id>
+            <name>Release Repository</name>
+            <url>http://43.135.21.15:8091/repository/maven-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>maven-snapshots</id>
+            <name>Snapshot Repository</name>
+            <url>http://43.135.21.15:8091/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
 </project>
